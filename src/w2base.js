@@ -163,7 +163,11 @@ class w2base {
      */
     trigger(eventName, edata) {
         if (arguments.length == 1) {
-            edata = eventName
+            if (typeof eventName == 'string') {
+                edata = { type: eventName, target: this }
+            } else {
+                edata = eventName
+            }
         } else {
             edata.type = eventName
             edata.target = edata.target ?? this
@@ -271,10 +275,22 @@ class w2base {
     }
 
     /**
+     * This method renders component into the box. It is overwritten in descendents and in this base
+     * component it is empty.
+     */
+    render(box) {
+        // intentionally left blank
+    }
+
+    /**
      * Removes all classes that start with w2ui-* and sets box to null. It is needed so that control will
      * release the box to be used for other widgets
      */
     unmount() {
+        let edata = this.trigger('unmount', { target: this.name })
+        if (edata.isCancelled) {
+            return
+        }
         let remove = []
         // find classes that start with "w2ui-*"
         if (this.box instanceof HTMLElement) {
@@ -288,6 +304,8 @@ class w2base {
             .removeAttr('name')
             .html('')
         this.box = null
+        // event after
+        edata.finish()
     }
 }
 export { w2event, w2base }

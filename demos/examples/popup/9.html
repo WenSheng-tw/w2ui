@@ -12,13 +12,15 @@
 </div>
 
 <!--CODE-->
-<button class="w2ui-btn" onclick="popup()">Open Popup</button>
+<button id="popup" class="w2ui-btn">Open Popup</button>
 
 <!--CODE-->
 <script type="module">
-import { w2popup } from '__W2UI_PATH__'
+import { w2popup, query } from '__W2UI_PATH__'
 
-window.popup = function() {
+query('#popup').on('click', popup)
+
+function popup() {
     w2popup.open({
         width: 580,
         height: 400,
@@ -27,7 +29,8 @@ window.popup = function() {
         body: `
             <div class="w2ui-centered" style="line-height: 1.8">
                 <div>
-                Use tab key to loop through the input controls. <br>The focus will not leave popup. <br><br>
+                <span tabindex="0">Use tab key to loop through the input controls. <br>The focus will not leave popup.</span>
+                <br><br>
                 Text 1: <input class="w2ui-input" style="margin-bottom: 5px"><br>
                 Text 2: <input class="w2ui-input" style="margin-bottom: 5px"><br>
                 Text 3: <input class="w2ui-input" style="margin-bottom: 5px"><br>

@@ -9,6 +9,10 @@
     transition: opacity 0.1s;
     border-radius: 4px;
 
+    .w2ui-draggable {
+        cursor: move;
+    }
+
     .w2ui-overlay-body {
         display: inline-block;
         border-radius: 4px;
@@ -115,6 +119,14 @@
 }
 
 /* color overlay */
+.w2ui-colors-header {
+    padding: 4px 11px;
+    border-bottom: 1px solid #dddddd;
+    font-weight: bold;
+    font-size: 14px;
+    cursor: move;
+}
+
 .w2ui-colors {
     padding: 8px;
     padding-bottom: 0px;
@@ -122,7 +134,8 @@
     border-radius: 3px;
     overflow: hidden;
     width: 270px;
-    height: 240px;
+    height: 270px;
+    user-select: none;
 
     * { .box-sizing; }
 
@@ -155,8 +168,10 @@
             }
 
             .w2ui-icon {
-                padding-top: 1px;
-                width: 30px
+                padding-top: 0;
+                margin-top: -2px;
+                width: 30px;
+                height: 21px;
             }
         }
     }
@@ -190,13 +205,39 @@
                     font-size: 14px;
                     text-shadow: 0px 0px 2px #222;
                 }
+                &.w2ui-color-picker {
+                    position: absolute;
+                    right: 11px;
+                    margin-top: 1px;
+                    cursor: pointer;
+                    border: 1px solid #b9b5b5;
+                    width: 28px;
+                    height: 23px;
+                    color: #6e7e9f;
+                    background-color: #e6e3e3;
+                    border-radius: 3px;
+                    &:hover {
+                        color: #444;
+                        outline: 1px solid #888;
+                        border: 1px solid #e0e1e5;
+                        background-color: #e0e1e5;
+                    }
+                    .w2ui-icon {
+                        position: relative;
+                        top: -7px;
+                        left: -2px;
+                        margin: 0;
+                        padding: 0;
+                        font-size: 14px;
+                        height: 20px;
+                    }
+                }
             }
-
         }
     }
 
     .w2ui-tab-content.tab-2 {
-        height: 184px;
+        height: 213px;
         padding: 1px 2px;
 
         .palette {
@@ -216,7 +257,7 @@
             position: relative;
             width: 150px;
             height: 12px;
-            margin: 10px 0px 0px 0px;
+            margin: 12px 0px 0px 0px;
             background: linear-gradient(90deg, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%);
         }
 
@@ -224,7 +265,7 @@
             position: relative;
             width: 150px;
             height: 12px;
-            margin: 20px 0px 0px 0px;
+            margin: 14px 0px 0px 0px;
             background-color: #fff;
             background-image: linear-gradient(45deg, #bbb 25%, transparent 25%, transparent 75%, #bbb 75%, #bbb),
                               linear-gradient(45deg, #bbb 25%, transparent 25%, transparent 75%, #bbb 75%, #bbb);
@@ -267,6 +308,16 @@
             transform: translateX(-1px);
         }
 
+        input.final {
+            font-size: 12px;
+            border-radius: 2px;
+            border: 1px solid #ccc;
+            width: 100px;
+            padding: 4px;
+            color: #333;
+            margin-top: 14px;
+        }
+
         .color-info {
             float: right;
             margin-right: -5px;
@@ -306,18 +357,49 @@
                     color: #333;
                 }
                 &.opacity {
-                    margin: 11px 0px 0px 8px;
+                    margin: 6px 0px 0px 8px;
                     span {
                         width: 42px;
+                        margin-left: 0px;
+                        margin-top: 5px;
                     }
                     input {
                         width: 38px;
+                        margin-left: 6px;
                         text-align: center;
                     }
                 }
             }
 
         }
+
+        .w2ui-color-picker {
+            position: relative;
+            left: 5px;
+            top: 9px;
+            display: inline-block;
+            cursor: pointer;
+            border: 1px solid #b9b5b5;
+            width: 28px;
+            height: 24px;
+            color: #6e7e9f;
+            background-color: #e6e3e3;
+            border-radius: 3px;
+            &:hover {
+                color: #444;
+                outline: 1px solid #888;
+                border: 1px solid #e0e1e5;
+                background-color: #e0e1e5;
+            }
+            .w2ui-icon {
+                position: relative;
+                top: -3px;
+                left: 3px;
+                font-size: 14px;
+                height: 20px;
+            }
+        }
+
     }
 }
 
@@ -352,6 +434,8 @@
     border-radius: 5px;
     overflow-x: hidden;
     cursor: default;
+    user-select: none;
+    -webkit-user-select: none; // stil need -webkit-user-select to make it work on the iPhone
 
     .w2ui-menu-item {
         display: flex;
@@ -369,6 +453,7 @@
             background-color: @dropdown-item-odd-background-color;
         }
 
+        &.expanded,
         &:hover {
             background-color: #eaeaea;
         }
@@ -534,8 +619,7 @@
         padding: 0 3px;
     }
 
-    .expanded,
-    .collapsed {
+    .has-sub-menu {
         .menu-extra span {
             position: relative; // needed for :after to be absolute
             border-color: transparent;
@@ -550,20 +634,15 @@
                 border-left: 5px solid #808080;
                 border-top: 5px solid transparent;
                 border-bottom: 5px solid transparent;
-                transform: rotateZ(-90deg);
+                transform: rotateZ(0deg);
                 pointer-events: none;
                 margin-left: -2px;
-                margin-top: 3px;
+                margin-top: 4px;
             }
             &:hover {
                 border-color: transparent;
                 background-color: transparent;
             }
-        }
-    }
-    .collapsed {
-        .menu-extra span:after {
-            transform: rotateZ(90deg);
         }
     }
 }
@@ -572,6 +651,7 @@
 .w2ui-overlay .w2ui-overlay-body.w2ui-dark {
     .w2ui-menu-item {
         color: #d9d9d9;
+        &.expanded,
         &:hover {
             background-color: #51545a;
         }
@@ -598,8 +678,7 @@
         border-top: 1px solid #434444;
         border-bottom: 1px solid #434444;
     }
-    .w2ui-menu .expanded .menu-extra span:after,
-    .w2ui-menu .collapsed .menu-extra span:after {
+    .w2ui-menu .has-sub-menu .menu-extra span:after {
         border-left: 5px solid #eaeaea;
     }
 }

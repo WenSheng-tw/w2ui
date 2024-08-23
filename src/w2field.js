@@ -78,11 +78,8 @@ class w2field extends w2base {
             console.log('ERROR: Cannot init w2field on empty subject')
             return
         }
-        if (el._w2field) {
-            el._w2field.reset() // will remove all previous events
-        } else {
-            el._w2field = this
-        }
+        el._w2field?.reset?.() // will remove all previous events
+        el._w2field = this
         this.el = el
         this.init()
     }
@@ -137,9 +134,11 @@ class w2field extends w2base {
                 break
             }
             case 'color': {
+                let size = parseInt(getComputedStyle(this.el)['font-size']) || 12
                 defaults     = {
                     prefix      : '#',
-                    suffix      : `<div style="width: ${(parseInt(getComputedStyle(this.el)['font-size'])) || 12}px">&#160;</div>`,
+                    suffix      : `<div style="width: ${size}px; height: ${size}px; margin-top: -2px;
+                                    position: relative; top: 50%; transform: translateY(-50%);">&#160;</div>`,
                     arrow       : false,
                     advanced    : null, // open advanced by default
                     transparent : true
@@ -211,7 +210,13 @@ class w2field extends w2base {
                 defaults = {
                     items           : [],
                     selected        : {},
-                    url             : null,   // url to pull data from // TODO: implement
+                    prefix          : '',
+                    suffix          : '',
+                    openOnFocus     : false,  // if to show overlay onclick or when typing
+                    icon            : null,
+                    iconStyle       : '',
+                    // -- following options implemented in w2tooltip
+                    url             : null,   // remove source for items
                     recId           : null,   // map retrieved data from url to id, can be string or function
                     recText         : null,   // map retrieved data from url to text, can be string or function
                     method          : null,   // default httpMethod
@@ -223,24 +228,19 @@ class w2field extends w2base {
                     maxDropWidth    : null,   // if null then auto set
                     minDropWidth    : null,   // if null then auto set
                     match           : 'begins', // ['contains', 'is', 'begins', 'ends']
-                    icon            : null,
-                    iconStyle       : '',
                     align           : 'both', // same width as control
                     altRows         : true,   // alternate row color
                     renderDrop      : null,   // render function for drop down item
                     compare         : null,   // compare function for filtering
                     filter          : true,   // weather to filter at all
                     hideSelected    : false,  // hide selected item from drop down
-                    prefix          : '',
-                    suffix          : '',
+                    markSearch      : false,
                     msgNoItems      : 'No matches',
                     msgSearch       : 'Type to search...',
-                    openOnFocus     : false,  // if to show overlay onclick or when typing
-                    markSearch      : false,
                     onSearch        : null,   // when search needs to be performed
                     onRequest       : null,   // when request is submitted
                     onLoad          : null,   // when data is received
-                    onError         : null    // when data fails to load due to server error or other failure modes
+                    onError         : null,    // when data fails to load due to server error or other failure modes
                 }
                 if (typeof options.items == 'function') {
                     options._items_fun = options.items
@@ -283,7 +283,19 @@ class w2field extends w2base {
                     items           : [],    // id, text, tooltip, icon
                     selected        : [],
                     max             : 0,     // max number of selected items, 0 - unlimited
-                    url             : null,  // not implemented
+                    maxItemWidth    : 250,   // max width for a single item
+                    style           : '',    // style for container div
+                    openOnFocus     : false, // if to show overlay onclick or when typing
+                    renderItem      : null,  // render selected item
+                    onMouseEnter    : null,  // when an item is mouse over
+                    onMouseLeave    : null,  // when an item is mouse out
+                    onScroll        : null,   // when div with selected items is scrolled
+                    onClick         : null,  // when an item is clicked
+                    onAdd           : null,  // when an item is added
+                    onNew           : null,  // when new item should be added
+                    onRemove        : null,  // when an item is removed
+                    // -- following options implemented in w2tooltip
+                    url             : null,  // remove source for items
                     recId           : null,  // map retrieved data from url to id, can be string or function
                     recText         : null,  // map retrieved data from url to text, can be string or function
                     debounce        : 250,   // number of ms to wait before sending server call on search
@@ -291,33 +303,22 @@ class w2field extends w2base {
                     postData        : {},
                     minLength       : 1,     // min number of chars when trigger search
                     cacheMax        : 250,
-                    maxItemWidth    : 250,   // max width for a single item
-                    maxDropHeight   : 350,   // max height for drop down menu
-                    maxDropWidth    : null,  // if null then auto set
                     match           : 'begins', // ['contains', 'is', 'begins', 'ends']
                     align           : '',    // align drop down related to search field
                     altRows         : true,  // alternate row color
-                    openOnFocus     : false, // if to show overlay onclick or when typing
-                    markSearch      : false,
                     renderDrop      : null,  // render function for drop down item
-                    renderItem      : null,  // render selected item
+                    maxDropHeight   : 350,   // max height for drop down menu
+                    maxDropWidth    : null,  // if null then auto set
+                    markSearch      : false,
                     compare         : null,  // compare function for filtering
                     filter          : true,  // alias for compare
                     hideSelected    : true,  // hide selected item from drop down
-                    style           : '',    // style for container div
                     msgNoItems      : 'No matches',
                     msgSearch       : 'Type to search...',
                     onSearch        : null,  // when search needs to be performed
                     onRequest       : null,  // when request is submitted
                     onLoad          : null,  // when data is received
                     onError         : null,  // when data fails to load due to server error or other failure modes
-                    onClick         : null,  // when an item is clicked
-                    onAdd           : null,  // when an item is added
-                    onNew           : null,  // when new item should be added
-                    onRemove        : null,  // when an item is removed
-                    onMouseEnter    : null,  // when an item is mouse over
-                    onMouseLeave    : null,  // when an item is mouse out
-                    onScroll        : null   // when div with selected items is scrolled
                 }
                 options  = w2utils.extend({}, defaults, options, { suffix: '' })
                 if (typeof options.items == 'function') {
@@ -326,7 +327,7 @@ class w2field extends w2base {
                 // validate match
                 let valid = ['is', 'begins', 'contains', 'ends']
                 if (!valid.includes(options.match)) {
-                    console.log(`ERROR: invalid value "${option.match}" for option.match. It should be one of following: ${valid.join(', ')}.`)
+                    console.log(`ERROR: invalid value "${options.match}" for option.match. It should be one of following: ${valid.join(', ')}.`)
                 }
                 options.items    = w2utils.normMenu.call(this, options.items)
                 options.selected = w2utils.normMenu.call(this, options.selected)
@@ -447,6 +448,14 @@ class w2field extends w2base {
         let options = this.options
         let time    = Date.now()
         let styles  = getComputedStyle(this.el)
+        // update color
+        if (this.type == 'color') {
+            let color = this.el.value
+            if (color.substr(0, 1) != '#' && color.substr(0, 3) != 'rgb') {
+                color = '#' + color
+            }
+            query(this.helpers.suffix).find(':scope > div').css('background-color', color)
+        }
         // enum
         if (this.type == 'list') {
             // next line will not work in a form with span: -1
@@ -517,6 +526,7 @@ class w2field extends w2base {
                 }, 1)
             }
         }
+        // multi select control
         let div = this.helpers.multi
         if (['enum', 'file'].includes(this.type) && div) {
             let html = ''
@@ -776,6 +786,7 @@ class w2field extends w2base {
             query(this.helpers[key]).remove()
         })
         this.helpers = {}
+        delete this.el._w2field
     }
 
     clean(val) {
@@ -1189,8 +1200,8 @@ class w2field extends w2base {
             this.refresh()
         }
         if (this.type == 'combo') {
-            if (![9, 16].includes(event.keyCode) && this.options.openOnFocus !== true) {
-                // do not show when receives focus on tab or shift + tab
+            if (![9, 16, 27].includes(event.keyCode) && this.options.openOnFocus !== true) {
+                // do not show when receives focus on tab or shift + tab or on esc
                 this.updateOverlay()
             }
             // if arrows are clicked, it will show overlay
@@ -1403,15 +1414,17 @@ class w2field extends w2base {
                 'font-family'    : styles['font-family'],
                 'font-size'      : styles['font-size'],
                 'height'         : this.el.clientHeight + 'px',
-                'padding-top'    : styles['padding-top'],
-                'padding-bottom' : styles['padding-bottom'],
+                'padding-top'    : parseInt(styles['padding-top'], 10) + 1 + 'px',
+                'padding-bottom' : parseInt(styles['padding-bottom'], 10) - 1 + 'px',
                 'padding-left'   : this.tmp['old-padding-left'],
                 'padding-right'  : 0,
-                'margin-top'     : (parseInt(styles['margin-top'], 10) + 2) + 'px',
-                'margin-bottom'  : (parseInt(styles['margin-bottom'], 10) + 1) + 'px',
+                'margin-top'     : (parseInt(styles['margin-top'], 10)) + 'px',
+                'margin-bottom'  : (parseInt(styles['margin-bottom'], 10)) + 'px',
                 'margin-left'    : styles['margin-left'],
                 'margin-right'   : 0,
                 'z-index'        : 1,
+                'display'        : 'flex',
+                'align-items'    : 'center'
             })
         // only if visible
         query(this.el).css('padding-left', helper.clientWidth + 'px !important')

@@ -47,6 +47,8 @@
  *  - grid.show.columnReorder -> grid.reorderRows
  *  - updagte docs search.label (not search.text)
  *  - added columnAutoSize - which resizes column based on text in it
+ *  - added grid.replace()
+ *  - grid.compareSelection
  */
 
 import { w2base } from './w2base.js'
@@ -272,17 +274,17 @@ class w2grid extends w2base {
         this.msgEmpty      = '' // if not blank, then it is message when server returns no records
 
         this.buttons = {
-            'reload'   : { type: 'button', id: 'w2ui-reload', icon: 'w2ui-icon-reload', tooltip: 'Reload data in the list' },
-            'columns'  : { type: 'menu-check', id: 'w2ui-column-on-off', icon: 'w2ui-icon-columns', tooltip: 'Show/hide columns',
+            'reload'   : { type: 'button', id: 'w2ui-reload', icon: 'w2ui-icon-reload', tooltip: w2utils.lang('Reload data in the list') },
+            'columns'  : { type: 'menu-check', id: 'w2ui-column-on-off', icon: 'w2ui-icon-columns', tooltip: w2utils.lang('Show/hide columns'),
                 overlay: { align: 'none' }
             },
             'search'   : { type: 'html', id: 'w2ui-search',
                 html: '<div class="w2ui-icon w2ui-icon-search w2ui-search-down w2ui-action" data-click="searchShowFields"></div>'
             },
-            'add'      : { type: 'button', id: 'w2ui-add', text: 'Add New', tooltip: 'Add new record', icon: 'w2ui-icon-plus' },
-            'edit'     : { type: 'button', id: 'w2ui-edit', text: 'Edit', tooltip: 'Edit selected record', icon: 'w2ui-icon-pencil', batch: 1, disabled: true },
-            'delete'   : { type: 'button', id: 'w2ui-delete', text: 'Delete', tooltip: 'Delete selected records', icon: 'w2ui-icon-cross', batch: true, disabled: true },
-            'save'     : { type: 'button', id: 'w2ui-save', text: 'Save', tooltip: 'Save changed records', icon: 'w2ui-icon-check' }
+            'add'      : { type: 'button', id: 'w2ui-add', text: 'Add New', tooltip: w2utils.lang('Add new record'), icon: 'w2ui-icon-plus' },
+            'edit'     : { type: 'button', id: 'w2ui-edit', text: 'Edit', tooltip: w2utils.lang('Edit selected record'), icon: 'w2ui-icon-pencil', batch: 1, disabled: true },
+            'delete'   : { type: 'button', id: 'w2ui-delete', text: 'Delete', tooltip: w2utils.lang('Delete selected records'), icon: 'w2ui-icon-cross', batch: true, disabled: true },
+            'save'     : { type: 'button', id: 'w2ui-save', text: 'Save', tooltip: w2utils.lang('Save changed records'), icon: 'w2ui-icon-check' }
         }
 
         this.operators = { // for search fields
@@ -524,7 +526,8 @@ class w2grid extends w2base {
         return recs
     }
 
-    set(recid, record, noRefresh) { // does not delete existing, but overrides on top of it
+    // does not delete existing, but overrides on top of it
+    set(recid, record, noRefresh) {
         if ((typeof recid == 'object') && (recid !== null)) {
             noRefresh = record
             record    = recid
@@ -539,7 +542,7 @@ class w2grid extends w2base {
         } else { // find record to update
             let ind = this.get(recid, true)
             if (ind == null) return false
-            let isSummary = (this.records[ind] && this.records[ind].recid == recid ? false : true)
+            let isSummary = (this.records[ind]?.recid == recid ? false : true)
             if (isSummary) {
                 w2utils.extend(this.summary[ind], record)
             } else {
@@ -547,6 +550,20 @@ class w2grid extends w2base {
             }
             if (noRefresh !== true) this.refreshRow(recid, ind) // refresh only that record
         }
+        return true
+    }
+
+    // replaces existing record
+    replace(recid, record, noRefresh) {
+        let ind = this.get(recid, true)
+        if (ind == null) return false
+        let isSummary = (this.records[ind]?.recid == recid ? false : true)
+        if (isSummary) {
+            this.summary[ind] = record
+        } else {
+            this.records[ind] = record
+        }
+        if (noRefresh !== true) this.refreshRow(recid, ind) // refresh only that record
         return true
     }
 
@@ -1325,7 +1342,8 @@ class w2grid extends w2base {
                 let rg = {
                     name: ranges[i].name,
                     range: [{ recid: first.recid, column: first.column }, { recid: last.recid, column: last.column }],
-                    style: ranges[i].style || ''
+                    style: ranges[i].style || '',
+                    class: ranges[i].class
                 }
                 // add range
                 let ind = false
@@ -1450,9 +1468,14 @@ class w2grid extends w2base {
             range = query(this.box).find('#grid_'+ this.name +'_'+ rg.name)
             if (td1.length > 0 || td2.length > 0) {
                 if (range.length === 0) {
-                    rec2.append('<div id="grid_'+ this.name +'_' + rg.name +'" class="w2ui-selection" style="'+ rg.style +'">'+
-                                    (rg.name == 'selection' && this.show.selectionResizer ? '<div id="grid_'+ this.name +'_resizer" class="w2ui-selection-resizer"></div>' : '')+
-                                '</div>')
+                    rec2.append(`
+                        <div id="grid_${this.name}_${rg.name}" class="w2ui-selection ${rg.class ?? ''}" style="${rg.style}">
+                            ${rg.name == 'selection' && this.show.selectionResizer
+                                ? `<div id="grid_${this.name}_resizer" class="w2ui-selection-resizer"></div>`
+                                : ''
+                            }
+                        </div>
+                    `)
                     range = query(this.box).find('#grid_'+ this.name +'_'+ rg.name)
                 } else {
                     range.attr('style', rg.style)
@@ -1561,22 +1584,23 @@ class w2grid extends w2base {
                 return
             } else {
                 // default behavior
-                self.removeRange('grid-selection-expand')
                 self.addRange({
-                    name  : 'grid-selection-expand',
-                    range : mv.newRange,
-                    style : 'background-color: rgba(100,100,100,0.1); border: 2px dotted rgba(100,100,100,0.5);'
+                    name: 'selection-expand',
+                    range: mv.newRange,
+                    class: 'w2ui-selection-expand'
                 })
             }
         }
 
         function mouseStop(event) {
             // default behavior
-            self.removeRange('grid-selection-expand')
-            delete self.last.move
+            self.removeRange('selection-expand')
             query('body').off('.w2ui-' + self.name)
             // event after
-            if (edata.finish) edata.finish()
+            if (self.last.move?.type == 'expand' && edata.finish) {
+                edata.finish()
+            }
+            delete self.last.move
         }
     }
 
@@ -1603,6 +1627,10 @@ class w2grid extends w2base {
         } else {
             tmp.multiple = true
             tmp.clicked = { recids:  args }
+        }
+        if (this.compareSelection(args).select.length == 0) {
+            // if all needed records are already selected
+            return
         }
         let edata = this.trigger('select', tmp)
         if (edata.isCancelled === true) return 0
@@ -1729,6 +1757,10 @@ class w2grid extends w2base {
             tmp.multiple = true
             tmp.recids   = args
         }
+        if (this.compareSelection(args).unselect.length == 0) {
+            // if all needed records are already unselected
+            return
+        }
         let edata = this.trigger('select', tmp)
         if (edata.isCancelled === true) return 0
 
@@ -1801,6 +1833,44 @@ class w2grid extends w2base {
         // event after
         edata.finish()
         return unselected
+    }
+
+    compareSelection(newSel) {
+        let sel = this.getSelection()
+        let select = []
+        let unselect = []
+        if (this.selectType == 'row') {
+            // normalize
+            newSel.forEach((sel, ind) => {
+                if (typeof sel == 'object') newSel[ind] = sel.recid
+            })
+            // add items
+            for (let i = 0; i < newSel.length; i++) {
+                if (!sel.includes(newSel[i])) {
+                    select.push(newSel[i])
+                }
+            }
+            // remove items
+            for (let i = 0; i < newSel.length; i++) {
+                if (sel.includes(newSel[i])) {
+                    unselect.push(newSel[i])
+                }
+            }
+        } else {
+            // add more items
+            for (let ns = 0; ns < newSel.length; ns++) {
+                let flag = false
+                for (let s = 0; s < sel.length; s++) if (newSel[ns].recid == sel[s].recid && newSel[ns].column == sel[s].column) flag = true
+                if (!flag) select.push({ recid: newSel[ns].recid, column: newSel[ns].column })
+            }
+            // remove items
+            for (let s = 0; s < sel.length; s++) {
+                let flag = false
+                for (let ns = 0; ns < newSel.length; ns++) if (newSel[ns].recid == sel[s].recid && newSel[ns].column == sel[s].column) flag = true
+                if (!flag) unselect.push({ recid: sel[s].recid, column: sel[s].column })
+            }
+        }
+        return { select, unselect }
     }
 
     selectAll() {
@@ -1970,6 +2040,8 @@ class w2grid extends w2base {
         let last_search = this.last.search
         let hasHiddenSearches = false
         let overlay = query(`#w2overlay-${this.name}-search-overlay`)
+        // if emty sting, same as no search
+        if (value === '') value = null
         // add hidden searches
         for (let i = 0; i < this.searches.length; i++) {
             if (!this.searches[i].hidden || this.searches[i].value == null) continue
@@ -2167,7 +2239,7 @@ class w2grid extends w2base {
                         if (['date', 'time', 'datetime'].indexOf(search.type) != -1) op = 'is'
                         if (['list', 'enum'].indexOf(search.type) != -1) {
                             op = 'is'
-                            let tmp = el._w2field.get()
+                            let tmp = el._w2field?.get()
                             if (tmp && Object.keys(tmp).length > 0) val = tmp.id; else val = ''
                         }
                         if (search.type == 'int' && value !== '') {
@@ -2695,6 +2767,15 @@ class w2grid extends w2base {
             this.last.label = search.label
         }
         el.attr('placeholder', w2utils.lang('Search') + ' ' + w2utils.lang(search.label || search.caption || search.field, true))
+
+        // if there is pre-selected search
+        if (this.searchSelected) {
+            query(this.box).find(`#grid_${this.name}_search_all`).val(' ').prop('readOnly', true)
+            query(this.box).find(`#grid_${this.name}_search_name`).show().find('.name-text').html(this.searchSelected.text)
+        } else {
+            query(this.box).find(`#grid_${this.name}_search_all`).prop('readOnly', false)
+            query(this.box).find(`#grid_${this.name}_search_name`).hide().find('.name-text').html('')
+        }
     }
 
     // clears records and related params
@@ -2898,7 +2979,11 @@ class w2grid extends w2base {
             if (edata2.isCancelled === true) return
             // default behavior
             if (response.status && response.status != 200) {
-                self.error(response.status + ': ' + response.statusText)
+                response.json().then((data) => {
+                    self.error(response.status + ': ' + data.message ?? response.statusText)
+                }).catch(() => {
+                    self.error(response.status + ': ' + response.statusText)
+                })
             } else {
                 console.log('ERROR: Server communication failed.',
                     '\n   EXPECTED:', { total: 5, records: [{ recid: 1, field: 'value' }] },
@@ -3443,7 +3528,7 @@ class w2grid extends w2base {
             if (fld.type == 'list') {
                 new_val = fld.selected
             }
-            if (Object.keys(new_val).length === 0 || new_val == null) new_val = ''
+            if (new_val == null || Object.keys(new_val).length === 0) new_val = ''
             if (!w2utils.isPlainObject(new_val)) new_val = fld.clean(new_val)
         }
         if (input.type == 'checkbox') {
@@ -3699,15 +3784,17 @@ class w2grid extends w2base {
             if (query(event.target).closest('td').hasClass('w2ui-col-select')) fselect = true
             // clear other if necessary
             if (((!event.ctrlKey && !event.shiftKey && !event.metaKey && !fselect) || !this.multiSelect) && !this.showSelectColumn) {
-                if (this.selectType != 'row' && !last.columns[ind]?.includes(column)) flag = false
-                this.selectNone(true) // no need to trigger select event
+                if (this.selectType != 'row' && !last.columns[ind]?.includes(column)) {
+                    flag = false
+                }
                 if (flag === true && sel.length == 1) {
                     this.unselect({ recid: recid, column: column })
                 } else {
+                    this.selectNone(true) // no need to trigger select event
                     this.select({ recid: recid, column: column })
                 }
             } else {
-                if (this.selectType != 'row' && !last.columns[ind]?.includes(column)) flag = false
+                if (this.selectType != 'row') flag = false
                 if (flag === true) {
                     this.unselect({ recid: recid, column: column })
                 } else {
@@ -3800,7 +3887,7 @@ class w2grid extends w2base {
         if (this.show.columnMenu) {
             w2menu.show({
                 type: 'check',
-                anchor: document.body,
+                contextMenu: true,
                 originalEvent: event,
                 items: this.initColumnOnOff()
             })
@@ -3844,7 +3931,7 @@ class w2grid extends w2base {
         let col = this.columns[colIndex]
         let el = query(`#grid_${this.name}_column_${colIndex} .w2ui-col-header`)[0]
         if (col.autoResize === false || col.hidden === true || !el) {
-            return true;
+            return true
         }
         let style = getComputedStyle(el)
         let maxWidth = w2utils.getStrWidth(el.innerHTML, `font-family: ${style.fontFamily}; font-size: ${style.fontSize}`, true)
@@ -3949,25 +4036,32 @@ class w2grid extends w2base {
 
         switch (key) {
             case 8: // backspace
-            case 46: // delete
+            case 46: { // delete
                 // delete if button is visible
                 obj.delete()
                 cancel = true
                 event.stopPropagation()
                 break
-
-            case 27: // escape
-                obj.selectNone()
-                cancel = true
+            }
+            case 27: { // escape
+                if (obj.last.move?.type) {
+                    delete obj.last.move
+                    obj.removeRange('selection-preview')
+                    obj.removeRange('selection-expand')
+                    cancel = true
+                } else {
+                    obj.selectNone()
+                    cancel = true
+                }
                 break
-
-            case 65: // cmd + A
+            }
+            case 65: { // cmd + A
                 if (!event.metaKey && !event.ctrlKey) break
                 obj.selectAll()
                 cancel = true
                 break
-
-            case 13: // enter
+            }
+            case 13: { // enter
                 // if expandable columns - expand it
                 if (this.selectType == 'row' && obj.show.expandColumn === true) {
                     if (recEL.length <= 0) break
@@ -3991,44 +4085,44 @@ class w2grid extends w2base {
                     }
                 }
                 break
-
-            case 37: // left
+            }
+            case 37: { // left
                 moveLeft()
                 break
-
-            case 39: // right
+            }
+            case 39: { // right
                 moveRight()
                 break
-
-            case 33: // <PgUp>
+            }
+            case 33: { // <PgUp>
                 moveUp(pageSize)
                 break
-
-            case 34: // <PgDn>
+            }
+            case 34: { // <PgDn>
                 moveDown(pageSize)
                 break
-
-            case 35: // <End>
+            }
+            case 35: { // <End>
                 moveDown(-1)
                 break
-
-            case 36: // <Home>
+            }
+            case 36: { // <Home>
                 moveUp(-1)
                 break
-
-            case 38: // up
+            }
+            case 38: { // up
                 // ctrl (or cmd) + up -> same as home
                 moveUp(event.metaKey || event.ctrlKey ? -1 : 1)
                 break
-
-            case 40: // down
+            }
+            case 40: { // down
                 // ctrl (or cmd) + up -> same as end
                 moveDown(event.metaKey || event.ctrlKey ? -1 : 1)
                 break
-
+            }
             // copy & paste
             case 17: // ctrl key
-            case 91: // cmd key
+            case 91: { // cmd key
                 // SLOW: 10k records take 7.0
                 if (empty) break
                 // in Safari need to copy to buffer on cmd or ctrl key (otherwise does not work)
@@ -4039,8 +4133,8 @@ class w2grid extends w2base {
                     focus[0].select()
                 }
                 break
-
-            case 67: // - c
+            }
+            case 67: { // - c
                 // this fill trigger event.onComplete
                 if (event.metaKey || event.ctrlKey) {
                     if (w2utils.isSafari) {
@@ -4054,8 +4148,8 @@ class w2grid extends w2base {
                     }
                 }
                 break
-
-            case 88: // x - cut
+            }
+            case 88: { // x - cut
                 if (empty) break
                 if (event.ctrlKey || event.metaKey) {
                     if (w2utils.isSafari) {
@@ -4069,6 +4163,7 @@ class w2grid extends w2base {
                     }
                 }
                 break
+            }
         }
         let tmp = [32, 187, 189, 192, 219, 220, 221, 186, 222, 188, 190, 191] // other typeable chars
         for (let i = 48; i <= 111; i++) tmp.push(i) // 0-9,a-z,A-Z,numpad
@@ -4481,7 +4576,7 @@ class w2grid extends w2base {
         // default action
         if (this.contextMenu?.length > 0) {
             w2menu.show({
-                anchor: document.body,
+                contextMenu: true,
                 originalEvent: event,
                 items: this.contextMenu
             })
@@ -4708,7 +4803,7 @@ class w2grid extends w2base {
             if (multiField != true) {
                 this.sortData = []
                 sortIndex = 0
-             }
+            }
             if (direction === '') {
                 this.sortData.splice(sortIndex, 1)
             } else {
@@ -5197,9 +5292,9 @@ class w2grid extends w2base {
                 let ind = this.getSearch(sd.field, true)
                 let sf = this.searches[ind]
                 let display
-                if (Array.isArray(sd.value)) {
+                if (sf?.type == 'enum' && Array.isArray(sd.value)) {
                     display = `<span class="grid-search-count">${sd.value.length}</span>`
-                } else if (sf && sf.type == 'list') {
+                } else if (sf?.type == 'list') {
                     display = !!sd.text && sd.text !== sd.value ? `: ${sd.text}` : `: ${sd.value}`
                 } else {
                     display = `: ${sd.value}`
@@ -5283,7 +5378,7 @@ class w2grid extends w2base {
             '<div id="grid_'+ this.name +'_columns" class="w2ui-grid-columns">'+
             '    <table><tbody>'+ colHTML[1] +'</tbody></table>'+
             '</div>'+
-            `<div class="w2ui-intersection-marker" style="display: none; height: ${this.recordHeight-5}px">
+            `<div class="w2ui-intersection-marker" style="display: none; height: ${this.recordHeight - 5}px">
                <div class="top-marker"></div>
                <div class="bottom-marker"></div>
             </div>`
@@ -5305,7 +5400,7 @@ class w2grid extends w2base {
                     .toggleClass('w2ui-record-hover', event.type == 'mouseover')
             })
         }
-        if (w2utils.isIOS) {
+        if (w2utils.isMobile) {
             records.append(frecords)
                 .on('click', { delegate: 'tr' }, (event) => {
                     let index = query(event.delegate).attr('index') // don't read recid directly as it could be a number or a string
@@ -5317,7 +5412,7 @@ class w2grid extends w2base {
                 .on('click', { delegate: 'tr' }, (event) => {
                     let index = query(event.delegate).attr('index') // don't read recid directly as it could be a number or a string
                     let recid = this.records[index]?.recid
-                        // do not generate click if empty record is clicked
+                    // do not generate click if empty record is clicked
                     if (recid != '-none-') {
                         this.click(recid, event)
                     }
@@ -5326,7 +5421,7 @@ class w2grid extends w2base {
                     let index = query(event.delegate).attr('index') // don't read recid directly as it could be a number or a string
                     let recid = this.records[index]?.recid
                     let td = query(event.target).closest('td')
-                    let column = parseInt(td.attr('col') ?? -1)
+                    let column = td.attr('col') ? parseInt(td.attr('col')) : null
                     this.showContextMenu(recid, column, event)
                 })
                 .on('mouseover', { delegate: 'tr' }, (event) => {
@@ -5376,7 +5471,7 @@ class w2grid extends w2base {
                 // TODO: improve, scroll is not smooth, if scrolled to the end, it takes a while to return
                 let scroll = gridBody.data('scroll')
                 let container = gridBody.find('.w2ui-grid-records')
-                let amount = typeof event.wheelDelta != null ? -event.wheelDelta : (event.detail || event.deltaY)
+                let amount = typeof event.wheelDelta != "undefined" ? -event.wheelDelta : (event.detail || event.deltaY)
                 let newScrollTop = container.prop('scrollTop')
 
                 scroll.lastDelta += amount
@@ -5554,13 +5649,14 @@ class w2grid extends w2base {
                   '    <div id="grid_'+ this.name +'_footer" class="w2ui-grid-footer"></div>'+
                   '    <textarea id="grid_'+ this.name +'_focus" class="w2ui-grid-focus-input" '+
                             (this.tabIndex ? 'tabindex="' + this.tabIndex + '"' : '')+
-                            (w2utils.isIOS ? 'readonly' : '') +'></textarea>'+ // readonly needed on android not to open keyboard
+                            (w2utils.isMobile ? 'readonly' : '') +'></textarea>'+ // readonly needed on android not to open keyboard
                   '</div>')
         if (this.selectType != 'row') query(this.box).addClass('w2ui-ss')
         if (query(this.box).length > 0) query(this.box)[0].style.cssText += this.style
         // render toolbar
-        if (this.toolbar != null) this.toolbar.render(query(this.box).find('#grid_'+ this.name +'_toolbar')[0])
-        this.last.toolbar_height = query(this.box).find(`#grid_${this.name}_toolbar`).prop('offsetHeight')
+        let tb_box = query(this.box).find(`#grid_${this.name}_toolbar`)
+        if (this.toolbar != null) this.toolbar.render(tb_box[0])
+        this.last.toolbar_height = tb_box.prop('offsetHeight')
         // re-init search_all
         if (this.last.field && this.last.field != 'all') {
             let sd = this.searchData
@@ -5640,7 +5736,10 @@ class w2grid extends w2base {
         // event after
         edata.finish()
         // observe div resize
-        this.last.observeResize = new ResizeObserver(() => { this.resize() })
+        this.last.observeResize = new ResizeObserver(() => {
+            this.resize()
+            this.scroll()
+        })
         this.last.observeResize.observe(this.box)
         return Date.now() - time
 
@@ -5658,7 +5757,7 @@ class w2grid extends w2base {
             if (event.altKey) {
                 query(obj.box).find('.w2ui-grid-body').css('user-select', 'text')
                 obj.selectNone()
-                obj.last.move       = { type: 'text-select' }
+                obj.last.move = { type: 'text-select' }
                 obj.last.userSelect = 'text'
             } else {
                 let tmp  = event.target
@@ -5679,6 +5778,21 @@ class w2grid extends w2base {
                 let index = query(event.target).parents('tr').attr('index')
                 let recid = obj.records[index]?.recid
 
+                // if cell selection, on initial click start selection
+                if (obj.selectType == 'cell' && !event.shiftKey) {
+                    let column1 = parseInt(query(event.target).closest('td').attr('col'))
+                    let column2 = column1
+                    if (isNaN(column1)) {
+                        column1 = 0
+                        column2 = obj.columns.length - 1
+                    }
+                    obj.addRange({
+                        name: 'selection-preview',
+                        range: [{ recid, column: column1 }, { recid, column: column2 }],
+                        class: 'w2ui-selection-preview'
+                    })
+                }
+
                 obj.last.move = {
                     x      : event.screenX,
                     y      : event.screenY,
@@ -5692,7 +5806,17 @@ class w2grid extends w2base {
                     ghost  : false,
                     start  : true
                 }
-                if (obj.last.move.recid == null) obj.last.move.type = 'select-column'
+                if (obj.last.move.recid == null && obj.records.length > 0) {
+                    obj.last.move.type = 'select-column'
+                    let column = parseInt(query(event.target).closest('td').attr('col'))
+                    let start = obj.records[0].recid
+                    let end = obj.records[obj.records.length - 1].recid
+                    obj.addRange({
+                        name: 'selection-preview',
+                        range: [{ recid: start, column }, { recid: end, column }],
+                        class: 'w2ui-selection-preview'
+                    })
+                }
                 // set focus to grid
                 let target = event.target
                 let $input = query(obj.box).find('#grid_'+ obj.name + '_focus')
@@ -5790,7 +5914,7 @@ class w2grid extends w2base {
                 return
             }
             let mv = obj.last.move
-            if (!mv || ['select', 'select-column'].indexOf(mv.type) == -1) return
+            if (!mv || !['select', 'select-column'].includes(mv.type)) return
             mv.divX = (event.screenX - mv.x)
             mv.divY = (event.screenY - mv.y)
             if (Math.abs(mv.divX) <= 1 && Math.abs(mv.divY) <= 1) return // only if moved more then 1px
@@ -5799,7 +5923,7 @@ class w2grid extends w2base {
                 let tmp   = query(event.target).parents('tr')
                 let ind  = tmp.attr('index')
                 let recid = obj.records[ind]?.recid
-                if (recid == '-none-') recid = 'bottom'
+                if (recid == '-none-' || recid == null) recid = 'bottom'
                 if (recid != mv.from) {
                     // let row1 = query(obj.box).find('#grid_'+ obj.name + '_rec_'+ mv.recid)
                     let row2 = query(obj.box).find('#grid_'+ obj.name + '_rec_'+ recid)
@@ -5831,7 +5955,7 @@ class w2grid extends w2base {
                 })
                 return
             }
-            if (mv.start && mv.recid) {
+            if (obj.selectType == 'row' && mv.start && mv.recid) {
                 obj.selectNone()
                 mv.start = false
             }
@@ -5859,24 +5983,17 @@ class w2grid extends w2base {
                     for (let ii = parseInt(tmp[0]); ii <= parseInt(tmp[1]); ii++) {
                         cols.push(ii)
                     }
-                    if (mv.colRange != newRange) {
+                    if (mv.colRange != newRange && mv.type == 'select-column') {
                         edataCol = obj.trigger('columnSelect', { target: obj.name, columns: cols })
                         if (edataCol.isCancelled !== true) {
-                            if (mv.colRange == null) obj.selectNone()
-                            // highlight columns
-                            let tmp = newRange.split('-')
-                            query(obj.box).find('.w2ui-grid-columns .w2ui-col-header, .w2ui-grid-fcolumns .w2ui-col-header').removeClass('w2ui-col-selected')
-                            for (let j = parseInt(tmp[0]); j <= parseInt(tmp[1]); j++) {
-                                query(obj.box).find('#grid_'+ obj.name +'_column_' + j + ' .w2ui-col-header').addClass('w2ui-col-selected')
-                            }
-                            query(obj.box).find('.w2ui-col-number:not(.w2ui-head)').addClass('w2ui-row-selected')
                             // show new range
                             mv.colRange = newRange
-                            obj.removeRange('column-selection')
+                            let start = obj.records[0].recid
+                            let end = obj.records[obj.records.length - 1].recid
                             obj.addRange({
-                                name  : 'column-selection',
-                                range : [{ recid: obj.records[0].recid, column: tmp[0] }, { recid: obj.records[obj.records.length-1].recid, column: tmp[1] }],
-                                style : 'background-color: rgba(90, 145, 234, 0.1)'
+                                name: 'selection-preview',
+                                range: [{ recid: start, column: tmp[0] }, { recid: end, column: tmp[1] }],
+                                class: 'w2ui-selection-preview'
                             })
                         }
                     }
@@ -5914,23 +6031,14 @@ class w2grid extends w2base {
                     }
                 }
                 if (obj.selectType != 'row') {
-                    let sel = obj.getSelection()
-                    // add more items
-                    let tmp = []
-                    for (let ns = 0; ns < newSel.length; ns++) {
-                        let flag = false
-                        for (let s = 0; s < sel.length; s++) if (newSel[ns].recid == sel[s].recid && newSel[ns].column == sel[s].column) flag = true
-                        if (!flag) tmp.push({ recid: newSel[ns].recid, column: newSel[ns].column })
-                    }
-                    obj.select(tmp)
-                    // remove items
-                    tmp = []
-                    for (let s = 0; s < sel.length; s++) {
-                        let flag = false
-                        for (let ns = 0; ns < newSel.length; ns++) if (newSel[ns].recid == sel[s].recid && newSel[ns].column == sel[s].column) flag = true
-                        if (!flag) tmp.push({ recid: sel[s].recid, column: sel[s].column })
-                    }
-                    obj.unselect(tmp)
+                    let start = newSel[0]
+                    let end = newSel[newSel.length - 1]
+                    obj.addRange({
+                        name: 'selection-preview',
+                        range: [{ recid: start.recid, column: start.column }, { recid: end.recid, column: end.column }],
+                        class: 'w2ui-selection-preview'
+                    })
+                    mv.newRange = newSel
                 } else {
                     if (obj.multiSelect) {
                         let sel = obj.getSelection()
@@ -5947,9 +6055,12 @@ class w2grid extends w2base {
 
         function mouseStop(event) {
             let mv = obj.last.move
-            setTimeout(() => { delete obj.last.cancelClick }, 1)
+            setTimeout(() => {
+                delete obj.last.cancelClick
+            }, 1)
             if (query(event.target).parents().hasClass('.w2ui-head') || query(event.target).hasClass('.w2ui-head')) return
-            if (mv && ['select', 'select-column'].indexOf(mv.type) != -1) {
+            obj.removeRange('selection-preview')
+            if (mv && ['select', 'select-column'].includes(mv.type)) {
                 if (mv.colRange != null && edataCol.isCancelled !== true) {
                     let tmp = mv.colRange.split('-')
                     let sel = []
@@ -5958,9 +6069,12 @@ class w2grid extends w2base {
                         for (let j = parseInt(tmp[0]); j <= parseInt(tmp[1]); j++) cols.push(j)
                         sel.push({ recid: obj.records[i].recid, column: cols })
                     }
-                    obj.removeRange('column-selection')
                     edataCol.finish()
+                    obj.selectNone(true)
                     obj.select(sel)
+                } else if (mv.newRange != null) {
+                    obj.selectNone(true)
+                    obj.select(...mv.newRange)
                 }
                 if (obj.reorderRows == true && obj.last.move.reorder) {
                     if (mv.to != null) {
@@ -6010,18 +6124,21 @@ class w2grid extends w2base {
         }
     }
 
+    unmount() {
+        super.unmount()
+        this.toolbar?.unmount()
+        this.last.observeResize?.disconnect()
+    }
+
     destroy() {
         // event before
         let edata = this.trigger('destroy', { target: this.name })
         if (edata.isCancelled === true) return
-        // remove all events
-        query(this.box).off()
         // clean up
-        if (typeof this.toolbar == 'object' && this.toolbar.destroy) this.toolbar.destroy()
+        this.toolbar?.destroy?.()
         if (query(this.box).find(`#grid_${this.name}_body`).length > 0) {
             this.unmount()
         }
-        this.last.observeResize?.disconnect()
         delete w2ui[this.name]
         // event after
         edata.finish()
@@ -6208,16 +6325,20 @@ class w2grid extends w2base {
             if (query(event.target).closest('td').length == 0) {
                 return
             }
-            // if mouse over invalid column
-            let rect1 = query(self.box).find('.w2ui-grid-body').get(0).getBoundingClientRect()
-            let rect2 = query(event.target).closest('td').get(0).getBoundingClientRect()
-            query(self.box).find('.w2ui-intersection-marker')
-                .show()
-                .css({
-                    left: (rect2.left - rect1.left) + 'px'
-                })
             let td = query(event.target).closest('td')
-            dragData.targetPos = td.hasClass('w2ui-head-last') ? self.columns.length : parseInt(td.attr('col'))
+            let newPos = td.hasClass('w2ui-head-last') ? self.columns.length : parseInt(td.attr('col'))
+            if (dragData.targetPos != newPos) {
+                // if mouse over invalid column
+                let rect1 = query(self.box).find('.w2ui-grid-body').get(0).getBoundingClientRect()
+                let rect2 = query(event.target).closest('td').get(0).getBoundingClientRect()
+                query(self.box).find('.w2ui-intersection-marker')
+                    .show()
+                    .css({
+                        left: (rect2.left - rect1.left) + 'px',
+                        height:rect2.height + 'px'
+                    })
+                dragData.targetPos = newPos
+            }
             return
         }
 
@@ -6315,31 +6436,30 @@ class w2grid extends w2base {
                             this.last.liveText = val
                             this.search(this.last.field, val)
                         }
-                        if (event.keyCode == 40) { // arrow down
-                            this.searchSuggest(true)
-                        }
                     }, 250)
                     input
-                        .on('change', event => {
-                            if (!this.liveSearch) {
-                                this.search(this.last.field, event.target.value)
-                                this.searchSuggest(true, true, this)
-                            }
-                        })
                         .on('blur', () => { this.last.liveText = '' })
                         .on('keyup', (event) => {
-                            switch(event.keyCode) {
-                                case 40: { // arrow down
+                            switch (event.keyCode) {
+                                case 40: {
+                                    // show saved searches on arrow down
                                     this.searchSuggest(true)
                                     break
                                 }
+                                case 38: {
+                                    // hide saved searches on arrow up
+                                    this.searchSuggest(true, true)
+                                    break
+                                }
                                 case 13: {
+                                    // search on enter key
                                     this.search(this.last.field, event.target.value)
-                                    event.preventDefault()
                                     break
                                 }
                                 default: {
+                                    // live search (if enabled)
                                     slowSearch(event)
+                                    break
                                 }
                             }
                         })
@@ -7674,7 +7794,7 @@ class w2grid extends w2base {
         let first = parseInt(tr1.next().attr('line'))
         let last  = parseInt(tr2.prev().attr('line'))
         let tmp, tmp1, tmp2, rec_start, rec_html
-        if (first < start || first == 1 || this.last.vscroll.pull_refresh) { // scroll down
+        if (first <= start || first == 1 || this.last.vscroll.pull_refresh) { // scroll down
             if (end <= last + this.last.vscroll.show_extra - 2 && end != this.total) return
             this.last.vscroll.pull_refresh = false
             // remove from top

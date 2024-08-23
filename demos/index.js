@@ -328,6 +328,8 @@ query(async function () {
                         { id: 'form/23', text: 'Better Groups', icon: 'fa fa-pencil-square-o' },
                         { id: 'form/24', text: 'Set Focus', icon: 'fa fa-pencil-square-o' },
                         { id: 'form/25', text: 'Promises', icon: 'fa fa-pencil-square-o' },
+                        { id: 'form/26', text: 'Field Type: Switch', icon: 'fa fa-pencil-square-o' },
+                        { id: 'form/27', text: 'Improved Array Fields', icon: 'fa fa-pencil-square-o' },
                     ]
                 },
                 { id: 'fields', text: 'Fields Basic', img: 'icon-folder', group: true, expanded: true, hidden: true,
@@ -372,7 +374,8 @@ query(async function () {
                 { id: 'popup-2.0', text: 'Features 2.0+', img: 'icon-folder', group: true, expanded: true, hidden: true,
                     nodes: [
                         { id: 'popup/10', text: 'Custom Actions', icon: 'fa fa-list-alt' },
-                        { id: 'popup/11', text: 'Promises', icon: 'fa fa-list-alt' }
+                        { id: 'popup/11', text: 'Promises', icon: 'fa fa-list-alt' },
+                        { id: 'popup/12', text: 'Resizable Popups', icon: 'fa fa-list-alt' }
                     ]
                 },
                 { id: 'tooltip', text: 'Tooltip Basic', img: 'icon-folder', group: true, expanded: true, hidden: true,
@@ -388,6 +391,8 @@ query(async function () {
                         { id: 'tooltip/5', text: 'Searchable Menu', icon: 'fa fa-comment-o' },
                         { id: 'tooltip/6', text: 'Menu Icons & Badges', icon: 'fa fa-comment-o' },
                         { id: 'tooltip/7', text: 'Advanced Controls', icon: 'fa fa-comment-o' },
+                        { id: 'tooltip/8', text: 'Show Anywhere', icon: 'fa fa-comment-o' },
+                        { id: 'tooltip/9', text: 'Draggable Tooltips', icon: 'fa fa-comment-o' },
                     ]
                 },
                 { id: 'utils', text: 'Utils Basic', img: 'icon-folder', group: true, expanded: true, hidden: true,
@@ -450,7 +455,8 @@ query(async function () {
                     }
                     let w2ui_js  = 'https://rawgit.com/vitmalina/w2ui/master/dist/w2ui.es6.min.js'
                     let w2ui_css = 'https://rawgit.com/vitmalina/w2ui/master/dist/w2ui.min.css'
-                    if (document.location.hostname == 'localhost') {
+                    let host = document.location.hostname
+                    if (host == 'localhost' || host.startsWith('192.168.') || host.startsWith('10.')) {
                         w2ui_js  = '../src/w2compat.js'
                         w2ui_css = '../dist/w2ui.css'
                     }

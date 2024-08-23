@@ -19,9 +19,9 @@
  *  - reorder = true - to allow reorder
  *  - mouseDown - for reorder
  *  - onReorder, onDragStart, onDragOver - events
- *  - this.mutlti - for multi select
+ *  - this.mutlti - for multi select (ctrl for one at a time and shift for range)
  *  - onSelect, onUnselect - new events
- *  - prev(), next()
+ *  - prev(), next(), getChain()
  */
 
 import { w2base } from './w2base.js'
@@ -349,12 +349,12 @@ class w2sidebar extends w2base {
             if (options.foldersFirst === false || (!isAfolder && !isBfolder) || (isAfolder && isBfolder)) {
                 let aText = a.text
                 let bText = b.text
+                if (a.order != null) aText = a.order
+                if (b.order != null) bText = b.order
                 if (!options.caseSensitive) {
                     aText = aText.toLowerCase()
                     bText = bText.toLowerCase()
                 }
-                if (a.order != null) aText = a.order
-                if (b.order != null) bText = b.order
                 let cmp = w2utils.naturalCompare(aText, bText)
                 return (cmp === 1 || cmp === -1) & options.reverse ? -cmp : cmp
             }
@@ -625,7 +625,12 @@ class w2sidebar extends w2base {
         let obj = this
         let nd  = this.get(id)
         if (nd == null) return
-        if (nd.disabled || nd.group) return // should click event if already selected
+        if (nd.disabled || nd.group) {
+            // even if disabled, it should still emit click event
+            let edata = obj.trigger('click', { target: id, originalEvent: event, node: nd, object: nd })
+            edata.finish()
+            return
+        }
         // select new one
         let newNode = query(obj.box).find('#node_'+ w2utils.escapeId(id))
         newNode.addClass('w2ui-selected').find('.w2ui-icon').addClass('w2ui-icon-selected')
@@ -640,35 +645,60 @@ class w2sidebar extends w2base {
             }
             // default action
             if (this.multi) {
-                let isShift = (event?.shiftKey || event?.ctrlKey || event?.metaKey)
+                /**
+                 * Multi select with shift or ctrl/meta
+                 */
+                let isShift = event?.shiftKey ?? false
+                let isCtrl  = (event?.ctrlKey || event?.metaKey) ?? false
                 if (typeof this.selected == 'string') {
                     this.selected = [this.selected]
                 }
-                if (!isShift) {
-                    let ids = this.selected?.filter(sid => sid != id)
-                    this.unselect(ids)
-                } else {
+                if (isCtrl && !isShift) { // only Ctrl
                     if (this.selected?.includes(id)) {
                         this.unselect(id)
                         return
+                    } else {
+                        this.select(id)
+                    }
+                } else if (!isCtrl && isShift) { // only Shift
+                    // select range in between
+                    let chain = this.getChain()
+                    let ind1 = Math.min(this.selected.map(sel => chain.indexOf(sel))) // first item in selection
+                    let ind2 = chain.indexOf(id)
+                    for (let i = Math.min(ind1, ind2); i < chain.length && i <= Math.max(ind1, ind2); i++) {
+                        let node = this.get(chain[i])
+                        if (!this.selected.includes(chain[i]) && node.hidden != true) {
+                            this.select(chain[i])
+                        }
+                    }
+
+                } else { // neither
+                    let ids = this.selected?.filter(sid => sid != id && this.selected.includes(sid))
+                    this.unselect(ids)
+                    // only select if it is not selected
+                    if (!this.selected?.includes(id)) {
+                        this.select(id)
                     }
                 }
-                if (!this.selected?.includes(id)) this.select(id)
+
             } else if (this.selected !== id) {
-                if (this.selected) this.unselect(this.selected)
+                /**
+                 * Single selection at a time
+                 */
+                if (this.selected != null) this.unselect(this.selected)
                 this.select(id)
-            }
-            // route processing
-            if (typeof nd.route == 'string') {
-                let route = nd.route !== '' ? String('/'+ nd.route).replace(/\/{2,}/g, '/') : ''
-                let info  = w2utils.parseRoute(route)
-                if (info.keys.length > 0) {
-                    for (let k = 0; k < info.keys.length; k++) {
-                        if (obj.routeData[info.keys[k].name] == null) continue
-                        route = route.replace((new RegExp(':'+ info.keys[k].name, 'g')), obj.routeData[info.keys[k].name])
+                // route processing
+                if (typeof nd.route == 'string') {
+                    let route = nd.route !== '' ? String('/'+ nd.route).replace(/\/{2,}/g, '/') : ''
+                    let info  = w2utils.parseRoute(route)
+                    if (info.keys.length > 0) {
+                        for (let k = 0; k < info.keys.length; k++) {
+                            if (obj.routeData[info.keys[k].name] == null) continue
+                            route = route.replace((new RegExp(':'+ info.keys[k].name, 'g')), obj.routeData[info.keys[k].name])
+                        }
                     }
+                    setTimeout(() => { window.location.hash = route }, 1)
                 }
-                setTimeout(() => { window.location.hash = route }, 1)
             }
             // event after
             edata.finish()
@@ -704,8 +734,8 @@ class w2sidebar extends w2base {
 
     next(node, noSubs) {
         if (node == null) return null
-        let parent   = node.parent
-        let ind      = this.get(node.id, true)
+        let parent = node.parent
+        let ind = this.get(node.id, true)
         let nextNode = null
         // jump inside
         if (node.expanded && node.nodes.length > 0 && noSubs !== true) {
@@ -724,8 +754,8 @@ class w2sidebar extends w2base {
 
     prev(node) {
         if (node == null) return null
-        let parent   = node.parent
-        let ind      = this.get(node.id, true)
+        let parent = node.parent
+        let ind = this.get(node.id, true)
         let lastChild = (node) => {
             if (node.expanded && node.nodes.length > 0) {
                 let nd = node.nodes[node.nodes.length - 1]
@@ -736,6 +766,24 @@ class w2sidebar extends w2base {
         let prevNode = (ind > 0) ? lastChild(parent.nodes[ind - 1]) : parent
         if (prevNode != null && (prevNode.hidden || prevNode.disabled || prevNode.group)) prevNode = this.prev(prevNode)
         return prevNode
+    }
+
+    // returns ids of expanded elements as a flat array
+    getChain(nodes, options = {}) {
+        options.returnDisabled ??= false
+        options.returnGroups ??= false
+        let ids = []
+        if (nodes == null) nodes = this.nodes
+        nodes.forEach(node => {
+            // can skip disabled if needed
+            if ((!node.disabled && !node.group) || (node.disabled && options.returnDisabled) || (node.group && options.returnGroups)) {
+                ids.push(node.id)
+            }
+            if (Array.isArray(node.nodes) && node.expanded) {
+                ids.push(...this.getChain(node.nodes, options))
+            }
+        })
+        return ids
     }
 
     keydown(event) {
@@ -1016,7 +1064,7 @@ class w2sidebar extends w2base {
         node.addClass('w2ui-editing')
         text.addClass('w2ui-focus')
             .css('pointer-events', 'all')
-            .attr('contenteditable', 'plaintext-only')
+            .attr('contenteditable', w2utils.isFirefox ? 'true' : 'plaintext-only')
             .on('blur.node-editing', event => {
                 // timeout is needed to add to the end of the event loop
                 setTimeout(_rename, 0)
@@ -1132,7 +1180,7 @@ class w2sidebar extends w2base {
                 <div class="w2ui-sidebar-top"></div>
                 <input id="sidebar_${this.name}_focus" ${(this.tabIndex ? 'tabindex="' + this.tabIndex + '"' : '')}
                     style="position: absolute; top: 0; right: 0; width: 1px; z-index: -1; opacity: 0"
-                    ${(w2utils.isIOS ? 'readonly' : '')}/>
+                    ${(w2utils.isMobile ? 'readonly' : '')}/>
                 <div class="w2ui-sidebar-body"></div>
                 <div class="w2ui-sidebar-bottom"></div>
             </div>`)
@@ -1241,7 +1289,7 @@ class w2sidebar extends w2base {
                     let txt = nd.count ?? this.badge.text
                     let style = this.badge.style
                     let last = this.last.badge[nd.id]
-                    if (typeof txt == 'function') txt = txt.call(this, node, level)
+                    if (typeof txt == 'function') txt = txt.call(this, nd, level)
                     $el.find('.w2ui-node-badge')
                         .html(txt)
                         .attr('style', `${style}; ${last?.style ?? ''}`)
@@ -1270,8 +1318,10 @@ class w2sidebar extends w2base {
         return options
     }
 
-    refresh(id, noBinding) {
+    refresh(id, options = {}) {
         if (this.box == null) return
+        let body = query(this.box).find(':scope > div > .w2ui-sidebar-body').get(0)
+        let { scrollTop, scrollLeft } = body ?? {}
         let time = Date.now()
         let self = this
         // event before
@@ -1334,7 +1384,8 @@ class w2sidebar extends w2base {
             nodeHTML = getNodeHTML(subNode)
             query(this.box).find(nodeSubId).append(nodeHTML)
             if (subNode.nodes.length !== 0) {
-                this.refresh(subNode.id, true)
+                // TODO: here
+                this.refresh(subNode.id, { recursive: true, })
             } else {
                 // trigger event
                 let edata2 = this.trigger('refresh', { target: subNode.id })
@@ -1349,9 +1400,11 @@ class w2sidebar extends w2base {
             div.scrollLeft = scroll.left
         }
         // bind events
-        if (!noBinding) {
+        if (!options.recursive) {
             let els = query(this.box).find(`${nodeId}, ${nodeId} .w2ui-eaction, ${nodeSubId} .w2ui-eaction`)
             w2utils.bindEvents(els, this)
+            // restore scroll position
+            query(body).prop({ scrollLeft, scrollTop })
         }
         // event after
         edata.finish()
@@ -1400,7 +1453,16 @@ class w2sidebar extends w2base {
                         <div id="node_${nd.id}_sub" style="${nd.style}; ${!nd.hidden && nd.expanded ? '' : 'display: none;'}"></div>`
                 }
             } else {
-                if (nd.selected && !nd.disabled) obj.selected = nd.id
+                if (nd.selected && !nd.disabled) {
+                    if (obj.multi) {
+                        obj.selected ??= []
+                        if (!obj.selected.includes(nd.id)) {
+                            obj.selected.push(nd.id)
+                        }
+                    } else {
+                        obj.selected = nd.id
+                    }
+                }
                 // icon or image
                 let image = ''
                 if (icon) {
@@ -1622,10 +1684,14 @@ class w2sidebar extends w2base {
         if (query(this.box).find('.w2ui-sidebar-body').length > 0) {
             this.unmount()
         }
-        this.last.observeResize?.disconnect()
         delete w2ui[this.name]
         // event after
         edata.finish()
+    }
+
+    unmount() {
+        super.unmount()
+        this.last.observeResize?.disconnect()
     }
 
     lock(msg, showSpinner) {
